@@ -719,7 +719,7 @@ window.executePurchase = async () => {
     } finally { hideLoader(); }
 };
 
-// ⭐⭐⭐ FAMGATEWAY PAYMENT LOGIC WITH DEBUG ALERT ⭐⭐⭐
+// ⭐⭐⭐ FIXED FAMGATEWAY PAYMENT LOGIC (No Alert) ⭐⭐⭐
 document.getElementById('btn-proceed-pay').onclick = async () => {
     const amt = parseFloat(document.getElementById('add-amount').value);
     if(!amt || amt < 10) return showToast("Minimum ₹10 required","error");
@@ -748,28 +748,31 @@ document.getElementById('btn-proceed-pay').onclick = async () => {
             throw new Error(`Backend Error: (Status: ${response.status}) ${responseText}`);
         }
         
-        // 🚨 DEBUG ALERT: Gateway ka asli jawab screen par dikhega
-        alert("FamGateway Response:\n\n" + JSON.stringify(data, null, 2));
-        
-        if(data.success && data.data) {
-            let orderId = data.data.order_id || data.data.orderId || data.data.id || data.data.data?.order_id;
-            
-            if(!orderId) {
-                throw new Error("Gateway se order ID nahi mili. (Screenshot check karein)");
+        // ✅ FIX: Exact path nikalna jo screenshot mein dikha (data.data.data.order_id)
+        let orderObj = null;
+        if (data.success && data.data) {
+            if (data.data.data && data.data.data.order_id) {
+                orderObj = data.data.data; // FamGateway nested format
+            } else if (data.data.order_id) {
+                orderObj = data.data; // Flat format (backup)
             }
-
-            localStorage.setItem('pending_tg_order', orderId);
-            localStorage.setItem('pending_tg_amount', amt.toFixed(2));
-            
-            let redirectUrl = data.data.checkout_url;
-            if (!redirectUrl) {
-                redirectUrl = `https://famgateway.in/pay.php?order_id=${orderId}`;
-            }
-            
-            window.location.href = redirectUrl;
-        } else {
-            throw new Error(data.message || "Failed to create payment order");
         }
+
+        if (!orderObj) {
+            throw new Error("Gateway se order ID nahi mili.");
+        }
+
+        const orderId = orderObj.order_id;
+        localStorage.setItem('pending_tg_order', orderId);
+        localStorage.setItem('pending_tg_amount', amt.toFixed(2));
+        
+        let redirectUrl = orderObj.checkout_url;
+        if (!redirectUrl) {
+            redirectUrl = `https://famgateway.in/pay.php?order_id=${orderId}`;
+        }
+        
+        window.location.href = redirectUrl;
+        
     } catch (e) {
         console.error("API Error:", e);
         let errorMsg = e.message;
@@ -852,12 +855,10 @@ async function checkPaymentStatusOnLoad() {
                         showToast("⚠️ Payment already processed.", "warning");
                     }
                 } else {
-                    alert("Verification Failed!\n\nGateway Reply:\n" + JSON.stringify(data, null, 2));
                     showToast("⚠️ Payment verify nahi hua.", "error");
                 }
             } catch(e) {
                 console.error(e);
-                alert("Network/Server Error: " + e.message);
                 showToast("Error verifying payment.", "error");
             } finally {
                 hideLoader();
