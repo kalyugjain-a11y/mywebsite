@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const admin = require('firebase-admin');
 
-// Firebase Init (Netlify Env Variable se JSON aayegi)
+// Firebase Init Environment Variable se
 if (!admin.apps.length) {
   try {
     admin.initializeApp({
@@ -23,7 +23,7 @@ exports.handler = async (event, context) => {
     const signature = event.headers['x-famgateway-signature'];
     const payload = event.body; 
 
-    // Key Env Variable se aayegi
+    // ❌ Hardcoded key hatadi
     const API_KEY = process.env.FAMGATEWAY_API_KEY;
 
     if (API_KEY && signature) {
@@ -60,7 +60,6 @@ exports.handler = async (event, context) => {
         const { uid } = localOrderSnap.val();
         
         await orderRef.set({ status: 'completed', amount: amount, date: new Date().toISOString() });
-
         await db.ref(`users/${uid}/balance`).transaction(b => (b || 0) + amount);
         
         await db.ref(`deposit_history/${uid}`).push({
