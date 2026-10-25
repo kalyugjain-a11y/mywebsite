@@ -1,3 +1,5 @@
 [build]
   publish = "."
-  environment = { SECRETS_SCAN_ENABLED = "false" }
+
+[build.environment]
+  SECRETS_SCAN_ENABLED = "false"
