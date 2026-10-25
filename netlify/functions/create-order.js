@@ -11,12 +11,12 @@ exports.handler = async (event, context) => {
 
     try {
         if (!event.body) throw new Error("No body received");
-        const { amount, userId, email, redirectUrl } = JSON.parse(event.body);
+        const { amount, email, redirectUrl } = JSON.parse(event.body);
         
-        // Nayi FamGateway API Key
         const API_KEY = "fam_0b60bb5c4b1bcbe227a6cc9d644b35875d5a17f0"; 
 
-        const response = await fetch("https://famgateway.in/api/create_order", {
+        // ✅ Sahi Endpoint (Hyphen ke saath)
+        const response = await fetch("https://famgateway.in/api/create-order", {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -24,18 +24,22 @@ exports.handler = async (event, context) => {
             },
             body: JSON.stringify({
                 amount: amount,
-                customer_name: email,
-                customer_email: email,
+                customer_name: email || "Customer",
                 redirect_url: redirectUrl
             })
         });
 
         const responseText = await response.text();
+        
+        if (!response.ok) {
+            throw new Error(`FamGateway Error (${response.status}): ${responseText}`);
+        }
+
         let data;
         try {
             data = JSON.parse(responseText);
         } catch (parseError) {
-            throw new Error(`Invalid JSON from FamGateway (Status ${response.status}): ${responseText}`);
+            throw new Error(`Invalid response from gateway: ${responseText}`);
         }
 
         return { statusCode: 200, headers, body: JSON.stringify({ success: true, data: data }) };
