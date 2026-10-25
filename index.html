@@ -748,16 +748,29 @@ document.getElementById('btn-proceed-pay').onclick = async () => {
             throw new Error(`Backend Error: Netlify function is not responding correctly. (Status: ${response.status})`);
         }
         
-        if(data.success && data.data && data.data.checkout_url) {
-            localStorage.setItem('pending_tg_order', data.data.order_id);
+        if(data.success && data.data) {
+            const orderId = data.data.order_id || data.data.orderId || data.data.id;
+            if(!orderId) throw new Error("Gateway se order ID nahi mili.");
+
+            localStorage.setItem('pending_tg_order', orderId);
             localStorage.setItem('pending_tg_amount', amt.toFixed(2));
-            window.location.href = data.data.checkout_url;
+            
+            let redirectUrl = data.data.checkout_url;
+            if (!redirectUrl) {
+                redirectUrl = `https://famgateway.in/pay.php?order_id=${orderId}`;
+            }
+            
+            window.location.href = redirectUrl;
         } else {
             throw new Error(data.message || "Failed to create payment order");
         }
     } catch (e) {
         console.error("API Error:", e);
-        showToast("Payment Error: " + e.message, "error");
+        let errorMsg = e.message;
+        if(errorMsg.includes("404") || errorMsg.includes("not found")) {
+            errorMsg = "Payment gateway abhi available nahi hai. Kripya thodi der baad try karein.";
+        }
+        showToast("Payment Error: " + errorMsg, "error");
         document.getElementById('step-processing').classList.add('hidden');
         document.getElementById('step-amount-input').classList.remove('hidden');
     }
@@ -795,13 +808,26 @@ async function checkPaymentStatusOnLoad() {
                 const data = await res.json();
                 console.log("Gateway Response:", data);
                 
-                const dataString = JSON.stringify(data).toLowerCase();
+                const statusStr = JSON.stringify(data).toLowerCase();
                 let isPaid = false;
                 let payAmt = 0;
 
-                if(dataString.includes('"paid":true') || dataString.includes('"status":"success"') || dataString.includes('"status":"paid"') || dataString.includes('"status":"completed"') || data.paid === true) {
+                if(
+                    data.status === 'success' || 
+                    data.status === 'paid' || 
+                    data.payment_status === 'success' ||
+                    data.paid === true || 
+                    statusStr.includes('"status":"success"') || 
+                    statusStr.includes('"status":"paid"')
+                ) {
                     isPaid = true;
-                    payAmt = parseFloat(data.amount || data.data?.amount || pendingAmount || 0);
+                    payAmt = parseFloat(
+                        data.amount || 
+                        data.payable_amount || 
+                        data.data?.amount || 
+                        data.transaction?.amount || 
+                        pendingAmount || 0
+                    );
                 }
 
                 if(isPaid && payAmt > 0) {
