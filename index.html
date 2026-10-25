@@ -338,7 +338,7 @@ try { app = initializeApp(firebaseConfig); auth = getAuth(app); db = getDatabase
 
 let currentUser = null, userData = { balance: 0 }, panelsCache = {}, resellerPricesCache = {};
 let usersDataCache = {}, lastPublicStats = null, previousBalance = 0;
-let isProcessingPayment = false; // 🛑 Payment Lock Flag
+let isProcessingPayment = false;
 const authScreen = document.getElementById('auth-screen');
 const mainApp = document.getElementById('main-app');
 
@@ -719,7 +719,7 @@ window.executePurchase = async () => {
     } finally { hideLoader(); }
 };
 
-// ⭐⭐⭐ NETLIFY BACKEND PAYMENT LOGIC ⭐⭐⭐
+// ⭐⭐⭐ FAMGATEWAY PAYMENT LOGIC ⭐⭐⭐
 document.getElementById('btn-proceed-pay').onclick = async () => {
     const amt = parseFloat(document.getElementById('add-amount').value);
     if(!amt || amt < 10) return showToast("Minimum ₹10 required","error");
@@ -745,13 +745,13 @@ document.getElementById('btn-proceed-pay').onclick = async () => {
         try {
             data = JSON.parse(responseText);
         } catch (parseError) {
-            throw new Error(`Backend Error: Netlify function is not responding correctly. Check if it's deployed. (Status: ${response.status})`);
+            throw new Error(`Backend Error: Netlify function is not responding correctly. (Status: ${response.status})`);
         }
         
         if(data.success && data.data && data.data.checkout_url) {
             localStorage.setItem('pending_tg_order', data.data.order_id);
             localStorage.setItem('pending_tg_amount', amt.toFixed(2));
-            window.location.href = "https://trustgateway.in" + data.data.checkout_url;
+            window.location.href = data.data.checkout_url;
         } else {
             throw new Error(data.message || "Failed to create payment order");
         }
@@ -765,13 +765,12 @@ document.getElementById('btn-proceed-pay').onclick = async () => {
 
 // ⭐⭐⭐ SMART REDIRECT CHECK (Wapas aane par - DOUBLE SPENDING FIX) ⭐⭐⭐
 async function checkPaymentStatusOnLoad() {
-    if(isProcessingPayment) return; // Agar pehle se process ho raha hai toh ruk jao
+    if(isProcessingPayment) return;
     isProcessingPayment = true;
 
     const urlParams = new URLSearchParams(window.location.search);
     if(urlParams.get('payment_success') === 'true') {
         
-        // URL saaf karo
         window.history.replaceState({}, document.title, window.location.pathname);
         
         const pendingOrderId = urlParams.get('order_id') || localStorage.getItem('pending_tg_order');
@@ -780,7 +779,6 @@ async function checkPaymentStatusOnLoad() {
         if(pendingOrderId && currentUser) {
             showLoader();
             try {
-                // 🔒 CHECK 1: Kya ye order pehle hi process ho chuka hai? (F5 Refresh se bachne ke liye)
                 const orderRef = ref(db, `processed_orders/${pendingOrderId}`);
                 const orderSnap = await get(orderRef);
                 
@@ -793,7 +791,6 @@ async function checkPaymentStatusOnLoad() {
                     return;
                 }
 
-                // Agar nahi hua hai, toh Gateway se status check karo
                 const res = await fetch(`/.netlify/functions/check-status?order_id=${pendingOrderId}`);
                 const data = await res.json();
                 console.log("Gateway Response:", data);
@@ -808,32 +805,27 @@ async function checkPaymentStatusOnLoad() {
                 }
 
                 if(isPaid && payAmt > 0) {
-                    // 🔒 CHECK 2: Firebase Transaction Lock (Double entry hamesha ke liye band)
                     const txResult = await runTransaction(orderRef, (currentData) => {
                         if (currentData === null) {
                             return { status: 'completed', amount: payAmt, date: new Date().toISOString() };
                         } else {
-                            return; // Agar already exists, toh abort
+                            return;
                         }
                     });
 
                     if (txResult.committed) {
-                        // Sirf tabhi balance add karo jab lock lag chuka ho
                         await runTransaction(ref(db, `users/${currentUser.uid}/balance`), b => (b || 0) + payAmt);
                         await updateMyPublicStats(payAmt);
                         showToast(`✅ Payment verified! ₹${payAmt} added.`, "success");
                         
-                        // Ab safai karo
                         localStorage.removeItem('pending_tg_order');
                         localStorage.removeItem('pending_tg_amount');
                     } else {
                         showToast("⚠️ Payment already processed.", "warning");
                     }
                 } else {
-                    // ❌ AGAR FAIL HUA TOH POPUP ME ASLI ERROR DIKHEGA
                     alert("Verification Failed!\n\nGateway Reply:\n" + JSON.stringify(data, null, 2) + "\n\nIska screenshot mujhe bhejna!");
                     showToast("⚠️ Payment verify nahi hua. Check popup.", "error");
-                    // Order ID delete nahi kar rahe taaki refresh pe dobara try ho sake
                 }
             } catch(e) {
                 console.error(e);
