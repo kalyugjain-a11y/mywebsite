@@ -1,1 +1,50 @@
+exports.handler = async (event, context) => {
+    const headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+    };
 
+    if (event.httpMethod === "OPTIONS") {
+        return { statusCode: 200, headers, body: "OK" };
+    }
+
+    try {
+        if (!event.body) throw new Error("No body received");
+        const { amount, userId, email, redirectUrl } = JSON.parse(event.body);
+        
+        // Nayi FamGateway API Key
+        const API_KEY = "fam_0b60bb5c4b1bcbe227a6cc9d644b35875d5a17f0"; 
+
+        const response = await fetch("https://famgateway.in/api/create_order", {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-API-Key': API_KEY
+            },
+            body: JSON.stringify({
+                amount: amount,
+                customer_name: email,
+                customer_email: email,
+                redirect_url: redirectUrl
+            })
+        });
+
+        const responseText = await response.text();
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (parseError) {
+            throw new Error(`Invalid JSON from FamGateway (Status ${response.status}): ${responseText}`);
+        }
+
+        return { statusCode: 200, headers, body: JSON.stringify({ success: true, data: data }) };
+
+    } catch (error) {
+        return {
+            statusCode: 500,
+            headers,
+            body: JSON.stringify({ success: false, message: error.message })
+        };
+    }
+};
