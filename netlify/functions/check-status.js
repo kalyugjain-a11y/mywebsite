@@ -5,9 +5,9 @@ exports.handler = async (event, context) => {
     if (!orderId) return { statusCode: 400, headers, body: JSON.stringify({ error: "No order id" }) };
 
     try {
-        const API_KEY = process.env.FAMGATEWAY_API_KEY;
+        const API_KEY = "fam_0b60bb5c4b1bcbe227a6cc9d644b35875d5a17f0";
         
-        // FamGateway se status check kar rahe hain
+        // ✅ Sahi Verification Endpoint (verify-order.php)
         const response = await fetch(`https://famgateway.in/api/verify-order.php?order_id=${orderId}`, {
             method: 'GET',
             headers: { 'X-API-Key': API_KEY }
