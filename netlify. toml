@@ -1,5 +1,5 @@
 [build]
   publish = "."
 
-[functions]
-  directory = "netlify/functions"
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "FAMGATEWAY_API_KEY,FIREBASE_SERVICE_ACCOUNT"
