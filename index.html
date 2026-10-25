@@ -719,7 +719,7 @@ window.executePurchase = async () => {
     } finally { hideLoader(); }
 };
 
-// ⭐⭐⭐ FAMGATEWAY PAYMENT LOGIC ⭐⭐⭐
+// ⭐⭐⭐ FAMGATEWAY PAYMENT LOGIC WITH DEBUG ALERT ⭐⭐⭐
 document.getElementById('btn-proceed-pay').onclick = async () => {
     const amt = parseFloat(document.getElementById('add-amount').value);
     if(!amt || amt < 10) return showToast("Minimum ₹10 required","error");
@@ -745,12 +745,18 @@ document.getElementById('btn-proceed-pay').onclick = async () => {
         try {
             data = JSON.parse(responseText);
         } catch (parseError) {
-            throw new Error(`Backend Error: Netlify function is not responding correctly. (Status: ${response.status})`);
+            throw new Error(`Backend Error: (Status: ${response.status}) ${responseText}`);
         }
         
+        // 🚨 DEBUG ALERT: Gateway ka asli jawab screen par dikhega
+        alert("FamGateway Response:\n\n" + JSON.stringify(data, null, 2));
+        
         if(data.success && data.data) {
-            const orderId = data.data.order_id || data.data.orderId || data.data.id;
-            if(!orderId) throw new Error("Gateway se order ID nahi mili.");
+            let orderId = data.data.order_id || data.data.orderId || data.data.id || data.data.data?.order_id;
+            
+            if(!orderId) {
+                throw new Error("Gateway se order ID nahi mili. (Screenshot check karein)");
+            }
 
             localStorage.setItem('pending_tg_order', orderId);
             localStorage.setItem('pending_tg_amount', amt.toFixed(2));
@@ -767,9 +773,6 @@ document.getElementById('btn-proceed-pay').onclick = async () => {
     } catch (e) {
         console.error("API Error:", e);
         let errorMsg = e.message;
-        if(errorMsg.includes("404") || errorMsg.includes("not found")) {
-            errorMsg = "Payment gateway abhi available nahi hai. Kripya thodi der baad try karein.";
-        }
         showToast("Payment Error: " + errorMsg, "error");
         document.getElementById('step-processing').classList.add('hidden');
         document.getElementById('step-amount-input').classList.remove('hidden');
@@ -806,7 +809,6 @@ async function checkPaymentStatusOnLoad() {
 
                 const res = await fetch(`/.netlify/functions/check-status?order_id=${pendingOrderId}`);
                 const data = await res.json();
-                console.log("Gateway Response:", data);
                 
                 const statusStr = JSON.stringify(data).toLowerCase();
                 let isPaid = false;
@@ -850,8 +852,8 @@ async function checkPaymentStatusOnLoad() {
                         showToast("⚠️ Payment already processed.", "warning");
                     }
                 } else {
-                    alert("Verification Failed!\n\nGateway Reply:\n" + JSON.stringify(data, null, 2) + "\n\nIska screenshot mujhe bhejna!");
-                    showToast("⚠️ Payment verify nahi hua. Check popup.", "error");
+                    alert("Verification Failed!\n\nGateway Reply:\n" + JSON.stringify(data, null, 2));
+                    showToast("⚠️ Payment verify nahi hua.", "error");
                 }
             } catch(e) {
                 console.error(e);
