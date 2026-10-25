@@ -784,7 +784,7 @@ document.getElementById('btn-proceed-pay').onclick = async () => {
     }
 };
 
-// ⭐⭐⭐ SMART REDIRECT CHECK (Wapas aane par - REAL-TIME LISTENER) ⭐⭐⭐
+// ⭐⭐⭐ SMART REDIRECT CHECK (Polling - No Webhook) ⭐⭐⭐
 async function checkPaymentStatusOnLoad() {
     if(isProcessingPayment) return;
     isProcessingPayment = true;
@@ -802,41 +802,55 @@ async function checkPaymentStatusOnLoad() {
             document.getElementById('step-amount-input').classList.add('hidden');
             document.getElementById('step-processing').classList.remove('hidden');
 
-            // 🎧 FIREBASE REAL-TIME LISTENER (No polling, instant update)
-            let timeoutId;
-            const balRef = ref(db, `users/${currentUser.uid}/balance`);
-            
-            const unsubscribe = onValue(balRef, (snap) => {
-                const newBal = snap.val() || 0;
-                
-                // Jaise hi webhook background mein balance add karega, ye turant chalega
-                if (newBal > previousBalance) {
-                    clearTimeout(timeoutId);
-                    unsubscribe(); // Listener hatao
-                    
-                    showToast(`✅ Payment verified! Balance updated.`, "success");
-                    
-                    localStorage.removeItem('pending_tg_order');
-                    localStorage.removeItem('pending_tg_amount');
+            let attempts = 0;
+            const maxAttempts = 20; // 20 * 3 sec = 1 minute tak check karega
+
+            const checkInterval = setInterval(async () => {
+                attempts++;
+                if (attempts > maxAttempts) {
+                    clearInterval(checkInterval);
                     hideLoader();
                     isProcessingPayment = false;
-                    
-                    // UI reset karo
                     document.getElementById('step-processing').classList.add('hidden');
                     document.getElementById('step-amount-input').classList.remove('hidden');
-                    document.getElementById('add-amount').value = '';
+                    showToast("Verification timeout. Please check history later.", "warning");
+                    return;
                 }
-            });
 
-            // ⏱️ Safety Timer: Agar 2 minute tak webhook fail ho jaye, toh loader hata do
-            timeoutId = setTimeout(() => {
-                unsubscribe();
-                hideLoader();
-                isProcessingPayment = false;
-                document.getElementById('step-processing').classList.add('hidden');
-                document.getElementById('step-amount-input').classList.remove('hidden');
-                showToast("Payment verify nahi hua. Thodi der baad refresh karein.", "warning");
-            }, 120000); // 2 minutes
+                showToast(`⏳ Verifying payment... (${attempts}/${maxAttempts})`, "warning");
+
+                try {
+                    const res = await fetch(`/.netlify/functions/check-status?order_id=${pendingOrderId}`);
+                    const data = await res.json();
+                    
+                    const statusStr = JSON.stringify(data).toLowerCase();
+                    let isPaid = (data.status === 'success' || data.status === 'paid' || data.paid === true || statusStr.includes('"status":"success"'));
+
+                    if(isPaid) {
+                        clearInterval(checkInterval);
+                        
+                        // 🔒 LOCK LAGAO (Double payment se bachne ke liye)
+                        const txResult = await runTransaction(ref(db, `processed_orders/${pendingOrderId}`), (cur) => cur === null ? {status: 'done'} : undefined);
+                        
+                        if(txResult.committed) {
+                            await runTransaction(ref(db, `users/${currentUser.uid}/balance`), b => (b || 0) + parseFloat(pendingAmount || 0));
+                            await updateMyPublicStats(parseFloat(pendingAmount || 0));
+                            showToast(`✅ Payment verified! Balance added.`, "success");
+                        } else {
+                            showToast("⚠️ Payment already processed.", "warning");
+                        }
+                        
+                        localStorage.removeItem('pending_tg_order');
+                        localStorage.removeItem('pending_tg_amount');
+                        hideLoader();
+                        isProcessingPayment = false;
+                        document.getElementById('step-processing').classList.add('hidden');
+                        document.getElementById('step-amount-input').classList.remove('hidden');
+                    }
+                } catch (e) {
+                    console.log("Polling error:", e);
+                }
+            }, 3000); 
 
         } else {
             isProcessingPayment = false;
