@@ -13,9 +13,9 @@ exports.handler = async (event, context) => {
         if (!event.body) throw new Error("No body received");
         const { amount, email, redirectUrl } = JSON.parse(event.body);
         
-        const API_KEY = "fam_0b60bb5c4b1bcbe227a6cc9d644b35875d5a17f0"; 
+        // Key Netlify Environment Variable se aayegi
+        const API_KEY = process.env.FAMGATEWAY_API_KEY; 
 
-        // ✅ Sahi Endpoint (Hyphen ke saath)
         const response = await fetch("https://famgateway.in/api/create-order", {
             method: 'POST',
             headers: { 
