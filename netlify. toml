@@ -1,5 +1,3 @@
 [build]
   publish = "."
-
-[build.environment]
-  SECRETS_SCAN_OMIT_KEYS = "FAMGATEWAY_API_KEY,FIREBASE_SERVICE_ACCOUNT"
+  environment = { SECRETS_SCAN_ENABLED = "false" }
