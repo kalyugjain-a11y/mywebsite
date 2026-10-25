@@ -42,7 +42,7 @@ exports.handler = async (event, context) => {
             throw new Error(`Invalid response from gateway: ${responseText}`);
         }
 
-        return { statusCode: 200, headers, body: JSON.stringify({ success: true, data: data }) };
+        return { statusCode: 200, headers, body: JSON.stringify(data) };
 
     } catch (error) {
         return {
